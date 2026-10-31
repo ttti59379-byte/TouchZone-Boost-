@@ -1,0 +1,66 @@
+
+name: Unpack ZIP and Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract ZIP
+        shell: bash
+        run: |
+          set -e
+          if [ -f settings.gradle ]; then
+            echo "Project already extracted"
+          else
+            ZIP=$(find . -maxdepth 2 -type f -iname "*.zip" | head -1)
+            mkdir -p /tmp/android-project
+
+            if [ -n "$ZIP" ]; then
+              unzip -q "$ZIP" -d /tmp/android-project
+              SEARCH=/tmp/android-project
+            else
+              SEARCH=.
+            fi
+
+            SETTINGS=$(find "$SEARCH" -type f -name settings.gradle | head -1)
+            if [ -z "$SETTINGS" ]; then
+              echo "Android project not found"
+              exit 1
+            fi
+
+            PROJECT=$(dirname "$SETTINGS")
+            cp -a "$PROJECT"/. "$GITHUB_WORKSPACE"/
+          fi
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TouchZoneBoost-APK
+          path: app/build/outputs/apk/debug/*.apk
+          
